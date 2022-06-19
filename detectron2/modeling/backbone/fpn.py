@@ -416,7 +416,7 @@ def build_retinanet_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
     return backbone
 
 @BACKBONE_REGISTRY.register()
-def build_resnet_rgbd_latefusion_fpn_backbone(cfg, input_shape_rgb: ShapeSpec, input_shape_depth: ShapeSpec):
+def build_resnet_rgbd_latefusion_fpn_backbone(cfg, input_shape: ShapeSpec):
     """
     Args:
         cfg: a detectron2 CfgNode
