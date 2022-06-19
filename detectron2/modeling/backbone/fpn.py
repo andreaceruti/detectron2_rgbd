@@ -11,7 +11,7 @@ from .backbone import Backbone
 from .build import BACKBONE_REGISTRY
 from .resnet import build_resnet_backbone
 
-__all__ = ["build_resnet_fpn_backbone", "build_retinanet_resnet_fpn_backbone", "FPN"]
+__all__ = ["build_resnet_fpn_backbone", "build_retinanet_resnet_fpn_backbone", "build_resnet_rgbd_latefusion_fpn_backbone", "FPN", "RGBD_FPN" ]
 
 
 class FPN(Backbone):
@@ -174,6 +174,154 @@ class FPN(Backbone):
             for name in self._out_features
         }
 
+class RGBD_FPN(Backbone):
+    """
+    This module implements :paper:`FPN` for RGB-D Late Fusion.
+    It creates pyramid features built on top of some input feature maps.
+    """
+
+    _fuse_type: torch.jit.Final[str]
+
+    def __init__(
+        self, in_features, out_channels, bottom_up_rgb=None, bottom_up_depth=None, 
+        bottom_up=None, norm="", top_block=None, fuse_type="add", rgbd_fuse_type="add"
+    ):
+
+        super(RGBD_FPN, self).__init__()
+        assert in_features, in_features
+
+        # Feature map strides and channels from the bottom up network (e.g. ResNet)
+        if bottom_up_rgb is not None:
+            input_shapes = bottom_up_rgb.output_shape()
+        else:
+            input_shapes = bottom_up.output_shape()
+        strides = [input_shapes[f].stride for f in in_features]
+        in_channels_per_feature = [input_shapes[f].channels for f in in_features]
+
+        _assert_strides_are_log2_contiguous(strides)
+        lateral_convs = []
+        output_convs = []
+        self.fusion_layers = nn.Sequential()
+        use_bias = norm == ""
+        for idx, in_channels in enumerate(in_channels_per_feature):
+            lateral_norm = get_norm(norm, out_channels)
+            output_norm = get_norm(norm, out_channels)
+
+            lateral_conv = Conv2d(
+                in_channels, out_channels, kernel_size=1, bias=use_bias, norm=lateral_norm
+            )
+            output_conv = Conv2d(
+                out_channels,
+                out_channels,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=use_bias,
+                norm=output_norm,
+            )
+            weight_init.c2_xavier_fill(lateral_conv)
+            weight_init.c2_xavier_fill(output_conv)
+            stage = int(math.log2(strides[idx]))
+            self.add_module("fpn_lateral{}".format(stage), lateral_conv)
+            self.add_module("fpn_output{}".format(stage), output_conv)
+
+            lateral_convs.append(lateral_conv)
+            output_convs.append(output_conv)
+            self.fusion_layers.add_module("fusion_layer_{}".format(stage), Conv2d(2*in_channels, in_channels, 1))
+        self._rgbd_fuse_type = rgbd_fuse_type
+
+        # Place convs into top-down order (from low to high resolution)
+        # to make the top-down computation in forward clearer.
+        self.lateral_convs = lateral_convs[::-1]
+        self.output_convs = output_convs[::-1]
+        self.top_block = top_block
+        self.in_features = tuple(in_features)
+        self.bottom_up = bottom_up
+        self.bottom_up_rgb = bottom_up_rgb
+        self.bottom_up_depth = bottom_up_depth
+        # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
+        self._out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in strides}
+        # top block output feature maps.
+        if self.top_block is not None:
+            for s in range(stage, stage + self.top_block.num_levels):
+                self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
+
+        self._out_features = list(self._out_feature_strides.keys())
+        self._out_feature_channels = {k: out_channels for k in self._out_features}
+        self._size_divisibility = strides[-1]
+        self._fuse_type = fuse_type
+
+
+    @property
+    def size_divisibility(self):
+        return self._size_divisibility
+
+    def forward(self, x):
+        """
+        Args:
+            input (dict[str->Tensor]): mapping feature map name (e.g., "res5") to
+                feature map tensor for each feature level in high to low resolution order.
+        Returns:
+            dict[str->Tensor]:
+                mapping from feature map name to FPN feature map tensor
+                in high to low resolution order. Returned feature names follow the FPN
+                paper convention: "p<stage>", where stage has stride = 2 ** stage e.g.,
+                ["p2", "p3", ..., "p6"].
+        """
+        if self.bottom_up is not None:
+            self.bottom_up_rgb_features, self.bottom_up_depth_features = self.bottom_up(x)
+        else:
+            self.bottom_up_rgb_features = self.bottom_up_rgb(x[:, :3, :, :])
+            self.bottom_up_depth_features = self.bottom_up_depth(x[:, 3:6, :, :]) 
+
+        bottom_up_features = {}
+        for i, k in enumerate(self.bottom_up_rgb_features.keys()):
+            if k in self.in_features:
+                k_depth = k[:3] + "_" + k[3:] # res0 to res_0
+                if self._rgbd_fuse_type == "conv":
+                    bottom_up_feature = torch.cat([self.bottom_up_rgb_features[k], 
+                                                    self.bottom_up_depth_features[k_depth]], 1)
+                    bottom_up_features[k] = self.fusion_layers[i](bottom_up_feature)
+                elif self._rgbd_fuse_type == "add":
+                    bottom_up_features[k] = self.bottom_up_rgb_features[k] + self.bottom_up_depth_features[k_depth]
+
+        results = []
+        prev_features = self.lateral_convs[0](bottom_up_features[self.in_features[-1]])
+        results.append(self.output_convs[0](prev_features))
+
+        # Reverse feature maps into top-down order (from low to high resolution)
+        for idx, (lateral_conv, output_conv) in enumerate(
+            zip(self.lateral_convs, self.output_convs)
+        ):
+            # Slicing of ModuleList is not supported https://github.com/pytorch/pytorch/issues/47336
+            # Therefore we loop over all modules but skip the first one
+            if idx > 0:
+                features = self.in_features[-idx - 1]
+                features = bottom_up_features[features]
+                top_down_features = F.interpolate(prev_features, scale_factor=2.0, mode="nearest")
+                lateral_features = lateral_conv(features)
+                prev_features = lateral_features + top_down_features
+                if self._fuse_type == "avg":
+                    prev_features /= 2
+                results.insert(0, output_conv(prev_features))
+
+        if self.top_block is not None:
+            if self.top_block.in_feature in bottom_up_features:
+                top_block_in_feature = bottom_up_features[self.top_block.in_feature]
+            else:
+                top_block_in_feature = results[self._out_features.index(self.top_block.in_feature)]
+            results.extend(self.top_block(top_block_in_feature))
+        assert len(self._out_features) == len(results)
+        return {f: res for f, res in zip(self._out_features, results)}
+
+    def output_shape(self):
+        return {
+            name: ShapeSpec(
+                channels=self._out_feature_channels[name], stride=self._out_feature_strides[name]
+            )
+            for name in self._out_features
+        }
+
 
 def _assert_strides_are_log2_contiguous(strides):
     """
@@ -264,5 +412,32 @@ def build_retinanet_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
         norm=cfg.MODEL.FPN.NORM,
         top_block=LastLevelP6P7(in_channels_p6p7, out_channels),
         fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
+    )
+    return backbone
+
+@BACKBONE_REGISTRY.register()
+def build_resnet_rgbd_latefusion_fpn_backbone(cfg, input_shape_rgb: ShapeSpec, input_shape_depth: ShapeSpec):
+    """
+    Args:
+        cfg: a detectron2 CfgNode
+    Returns:
+        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+    """
+    input_shape_rgb = ShapeSpec(channels=3)
+    bottom_up_rgb = build_resnet_backbone(cfg, input_shape_rgb)
+    # duplicate keys when loading pretrained-weights
+    input_shape_depth = ShapeSpec(channels=1)
+    bottom_up_depth = build_resnet_backbone(cfg, input_shape_depth)
+    in_features = cfg.MODEL.FPN.IN_FEATURES
+    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
+    backbone = RGBD_FPN(
+        bottom_up_rgb=bottom_up_rgb,
+        bottom_up_depth=bottom_up_depth,
+        in_features=in_features,
+        out_channels=out_channels,
+        norm=cfg.MODEL.FPN.NORM,
+        top_block=LastLevelMaxPool(),
+        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
+        rgbd_fuse_type=cfg.MODEL.FUSE_TYPE,
     )
     return backbone
