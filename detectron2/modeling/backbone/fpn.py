@@ -423,11 +423,11 @@ def build_resnet_rgbd_latefusion_fpn_backbone(cfg, input_shape: ShapeSpec):
     Returns:
         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
     """
-    input_shape_rgb = ShapeSpec(channels=3)
-    bottom_up_rgb = build_resnet_backbone(cfg, input_shape_rgb)
+    input_shape = ShapeSpec(channels=3)
+    bottom_up_rgb = build_resnet_backbone(cfg, input_shape)
     # duplicate keys when loading pretrained-weights
-    input_shape_depth = ShapeSpec(channels=1)
-    bottom_up_depth = build_depth_resnet_backbone(cfg, input_shape_depth)
+    input_shape = ShapeSpec(channels=1)
+    bottom_up_depth = build_depth_resnet_backbone(cfg, input_shape)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
     backbone = RGBD_FPN(
