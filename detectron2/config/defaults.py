@@ -86,6 +86,13 @@ _C.INPUT.FORMAT = "BGR"
 # Mask R-CNN supports either "polygon" or "bitmask" as ground truth.
 _C.INPUT.MASK_FORMAT = "polygon"  # alternative: "bitmask"
 
+#-------------------------------------------------------------------------------------------------------------------
+#RGBD FUSION
+#--------------------------------------------------------------------------------------------------------------------
+_C.MODEL.RESNETS.DEPTH_OUT_FEATURES = ["res_2", "res_3", "res_4", "res_5"]
+_C.MODEL.RGBD_FUSION = "none"
+_C.MODEL.FUSE_TYPE = "none"
+
 
 # -----------------------------------------------------------------------------
 # Dataset

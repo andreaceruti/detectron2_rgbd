@@ -9,7 +9,7 @@ from detectron2.layers import Conv2d, ShapeSpec, get_norm
 
 from .backbone import Backbone
 from .build import BACKBONE_REGISTRY
-from .resnet import build_resnet_backbone
+from .resnet import build_resnet_backbone, build_depth_resnet_backbone
 
 __all__ = ["build_resnet_fpn_backbone", "build_retinanet_resnet_fpn_backbone", "build_resnet_rgbd_latefusion_fpn_backbone", "FPN", "RGBD_FPN" ]
 
@@ -272,7 +272,7 @@ class RGBD_FPN(Backbone):
             self.bottom_up_rgb_features, self.bottom_up_depth_features = self.bottom_up(x)
         else:
             self.bottom_up_rgb_features = self.bottom_up_rgb(x[:, :3, :, :])
-            self.bottom_up_depth_features = self.bottom_up_depth(x[:, 3:6, :, :]) 
+            self.bottom_up_depth_features = self.bottom_up_depth(x[:, 3, :, :]) 
 
         bottom_up_features = {}
         for i, k in enumerate(self.bottom_up_rgb_features.keys()):
@@ -427,7 +427,7 @@ def build_resnet_rgbd_latefusion_fpn_backbone(cfg, input_shape_rgb: ShapeSpec, i
     bottom_up_rgb = build_resnet_backbone(cfg, input_shape_rgb)
     # duplicate keys when loading pretrained-weights
     input_shape_depth = ShapeSpec(channels=1)
-    bottom_up_depth = build_resnet_backbone(cfg, input_shape_depth)
+    bottom_up_depth = build_depth_resnet_backbone(cfg, input_shape_depth)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
     backbone = RGBD_FPN(
