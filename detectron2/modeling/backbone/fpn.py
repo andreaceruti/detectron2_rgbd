@@ -272,7 +272,7 @@ class RGBD_FPN(Backbone):
             self.bottom_up_rgb_features, self.bottom_up_depth_features = self.bottom_up(x)
         else:
             self.bottom_up_rgb_features = self.bottom_up_rgb(x[:, :3, :, :])
-            self.bottom_up_depth_features = self.bottom_up_depth(x[:, 3, :, :]) 
+            self.bottom_up_depth_features = self.bottom_up_depth(x[:, 3:4, :, :]) 
 
         bottom_up_features = {}
         for i, k in enumerate(self.bottom_up_rgb_features.keys()):
