@@ -639,7 +639,7 @@ class ResNet_depth(Backbone):
             for block in blocks:
                 assert isinstance(block, CNNBlockBase), block
 
-            name = "res" + str(i + 2)
+            name = "res_" + str(i + 2)
             stage = nn.Sequential(*blocks)
 
             self.add_module(name, stage)
