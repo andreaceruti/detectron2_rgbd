@@ -45,6 +45,11 @@ _C.MODEL.PIXEL_MEAN = [103.530, 116.280, 123.675]
 # Otherwise, you can use [57.375, 57.120, 58.395] (ImageNet std)
 _C.MODEL.PIXEL_STD = [1.0, 1.0, 1.0]
 
+#-------------------------------------------------------------------------------------------------------------------
+#RGBD FUSION
+#--------------------------------------------------------------------------------------------------------------------
+_C.MODEL.RGBD_FUSION = "none"
+_C.MODEL.FUSE_TYPE = "none"
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -85,13 +90,6 @@ _C.INPUT.FORMAT = "BGR"
 # The ground truth mask format that the model will use.
 # Mask R-CNN supports either "polygon" or "bitmask" as ground truth.
 _C.INPUT.MASK_FORMAT = "polygon"  # alternative: "bitmask"
-
-#-------------------------------------------------------------------------------------------------------------------
-#RGBD FUSION
-#--------------------------------------------------------------------------------------------------------------------
-_C.MODEL.RESNETS.DEPTH_OUT_FEATURES = ["res_2", "res_3", "res_4", "res_5"]
-_C.MODEL.RGBD_FUSION = "none"
-_C.MODEL.FUSE_TYPE = "none"
 
 
 # -----------------------------------------------------------------------------
@@ -485,6 +483,8 @@ _C.MODEL.RETINANET.NORM = ""
 # These options apply to both
 # ---------------------------------------------------------------------------- #
 _C.MODEL.RESNETS = CN()
+
+_C.MODEL.RESNETS.DEPTH_OUT_FEATURES = ["res_2", "res_3", "res_4", "res_5"]
 
 _C.MODEL.RESNETS.DEPTH = 50
 _C.MODEL.RESNETS.OUT_FEATURES = ["res4"]  # res4 for C4 backbone, res2..5 for FPN backbone
