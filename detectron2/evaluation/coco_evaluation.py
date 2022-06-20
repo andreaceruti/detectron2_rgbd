@@ -262,6 +262,15 @@ class COCOEvaluator(DatasetEvaluator):
         )
         for task in sorted(tasks):
             assert task in {"bbox", "segm", "keypoints"}, f"Got unknown task: {task}!"
+
+            ################CHECK RESULTS HERE
+            print("coco GT")
+            print(len(self._coco_api))
+            print(self._coco_api)
+            print("COCO RESULTS")
+            print(len(coco_results))
+            print(coco_results)
+
             coco_eval = (
                 _evaluate_predictions_on_coco(
                     self._coco_api,
