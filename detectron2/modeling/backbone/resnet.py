@@ -668,7 +668,6 @@ class ResNet_depth(Backbone):
         assert len(self._out_features)
         children = [x[0] for x in self.named_children()]
         for out_feature in self._out_features:
-            print(out_feature, children)
             assert out_feature in children, "Available children: {}".format(", ".join(children))
         self.freeze(freeze_at)
 

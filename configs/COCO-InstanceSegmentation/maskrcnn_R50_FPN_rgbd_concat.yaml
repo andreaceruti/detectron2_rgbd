@@ -6,17 +6,15 @@ MODEL:
     NAME: "build_resnet_rgbd_latefusion_fpn_backbone"
     FREEZE_AT: 0
   RGBD_FUSION: "late"
-  FUSE_TYPE: "add"
+  FUSE_TYPE: "conv"
   PIXEL_MEAN: [103.530, 116.280, 123.675, 127.5] #RGB, D
   PIXEL_STD: [1, 1, 1, 1] #RGB, D
   RESNETS:
     OUT_FEATURES: ["res2", "res3", "res4", "res5"]
     DEPTH: 50
-    NORM: "GN"
     STRIDE_IN_1X1: False
   FPN:
     IN_FEATURES: ["res2", "res3", "res4", "res5"]
-    NORM: "GN"
   ANCHOR_GENERATOR:
     SIZES: [[32], [64], [128], [256], [512]]  # One size for each in feature map
     ASPECT_RATIOS: [[0.5, 1.0, 2.0]]  # Three aspect ratios (same for all in feature maps)
@@ -32,13 +30,10 @@ MODEL:
     NUM_CLASSES: 1
   ROI_BOX_HEAD:
     NAME: "FastRCNNConvFCHead"
-    NUM_CONV: 4
-    NUM_FC: 1
+    NUM_FC: 2
     POOLER_RESOLUTION: 7
-    NORM: "GN"
   ROI_MASK_HEAD:
     NAME: "MaskRCNNConvUpsampleHead"
-    NORM: "GN"
     NUM_CONV: 4
     POOLER_RESOLUTION: 14
 
