@@ -24,6 +24,11 @@ from detectron2.solver import LRMultiplier
 from detectron2.utils.events import EventStorage, EventWriter
 from detectron2.utils.file_io import PathManager
 
+#import for LossEvalHook
+from detectron2.utils.logger import log_every_n_seconds
+import numpy as np
+from detectron2.data import build_detection_train_loader
+
 from .train_loop import HookBase
 
 __all__ = [
@@ -38,6 +43,8 @@ __all__ = [
     "PreciseBN",
     "TorchProfiler",
     "TorchMemoryStats",
+    "LossEvalHook",
+    "LossEvalHook2",
 ]
 
 
@@ -687,3 +694,140 @@ class TorchMemoryStats(HookBase):
                     self._logger.info("\n" + mem_summary)
 
                 torch.cuda.reset_peak_memory_stats()
+
+
+class LossEvalHook(HookBase):
+    def __init__(self, cfg, model, data_loader):
+        self._model = model
+        self._period = cfg.TEST.EVAL_PERIOD
+        self._root = cfg.OUTPUT_DIR
+        self._data_loader = data_loader
+        self._min_mean_loss = 0.0
+        self._bfirst = True
+    
+    def _do_loss_eval(self):
+        # Copying inference_on_dataset from evaluator.py
+        total = len(self._data_loader)
+        num_warmup = min(5, total - 1)
+            
+        start_time = time.perf_counter()
+        total_compute_time = 0
+        losses = []
+        for idx, inputs in enumerate(self._data_loader):            
+            if idx == num_warmup:
+                start_time = time.perf_counter()
+                total_compute_time = 0
+            start_compute_time = time.perf_counter()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            total_compute_time += time.perf_counter() - start_compute_time
+            iters_after_start = idx + 1 - num_warmup * int(idx >= num_warmup)
+            seconds_per_img = total_compute_time / iters_after_start
+            if idx >= num_warmup * 2 or seconds_per_img > 5:
+                total_seconds_per_img = (time.perf_counter() - start_time) / iters_after_start
+                eta = datetime.timedelta(seconds=int(total_seconds_per_img * (total - idx - 1)))
+                log_every_n_seconds(
+                    logging.INFO,
+                    "Loss on Validation  done {}/{}. {:.4f} s / img. ETA={}".format(
+                        idx + 1, total, seconds_per_img, str(eta)
+                    ),
+                    n=5,
+                )
+            loss_batch = self._get_loss(inputs)
+            losses.append(loss_batch)
+        mean_loss = np.mean(losses)
+        self.trainer.storage.put_scalar('validation_loss', mean_loss, smoothing_hint = False)
+        comm.synchronize()
+        return mean_loss
+            
+    def _get_loss(self, data):
+        # How loss is calculated on train_loop 
+        metrics_dict = self._model(data)
+        metrics_dict = {
+            k: v.detach().cpu().item() if isinstance(v, torch.Tensor) else float(v)
+            for k, v in metrics_dict.items()
+        }
+        total_losses_reduced = sum(loss for loss in metrics_dict.values())
+        return total_losses_reduced
+                
+    def after_step(self):
+        next_iter = self.trainer.iter + 1
+        is_final = next_iter == self.trainer.max_iter
+        if is_final or (self._period > 0 and next_iter % self._period == 0):
+            mean_loss = self._do_loss_eval()
+            if self._bfirst:
+                self._min_mean_loss = mean_loss
+                self._bfirst = False
+            #-------- save best model according to metrics --------
+            if mean_loss < self._min_mean_loss:
+                self._min_mean_loss = mean_loss
+                self.trainer.checkpointer.save('model_best_validationLoss')
+                with open(os.path.join(self._root, 'bestiter.txt'), 'a+') as f: 
+                    f.write('min val loss: ' + str(mean_loss) + ' at iter: ' + str(self.trainer.iter) + '\n')
+
+#implementation not tried yet
+class LossEvalHook2(HookBase):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg.clone()
+        self.cfg.DATASETS.TRAIN = cfg.DATASETS.VAL
+        self._loader = iter(build_detection_train_loader(self.cfg))
+        
+    def after_step(self):
+        data = next(self._loader)
+        with torch.no_grad():
+            loss_dict = self.trainer.model(data)
+            
+            losses = sum(loss_dict.values())
+            assert torch.isfinite(losses).all(), loss_dict
+
+            loss_dict_reduced = {"val_" + k: v.item() for k, v in 
+                                 comm.reduce_dict(loss_dict).items()}
+            losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+            if comm.is_main_process():
+                self.trainer.storage.put_scalars(total_val_loss=losses_reduced, 
+                                                 **loss_dict_reduced)
+
+
+
+class EarlyStopping(HookBase):
+    def __init__(self, cfg, patience):
+        self._patience = patience
+        self._period = cfg.TEST.EVAL_PERIOD
+        self._count = 0 #count for patience
+        self._bfirst = True
+        self._current_best_iteration = 0
+        self._current_best_validation_loss = 0
+        self._metric = "validation_loss"
+    
+    def after_step(self):
+        
+        next_iter = self.trainer.iter + 1
+        is_final = next_iter == self.trainer.max_iter        
+
+        if is_final or (self._period > 0 and next_iter % self._period == 0): #this should be called at each validation period after the loss has been already stored
+            
+            #now read the best loss and the current loss
+            metric_tuple = self.trainer.storage.latest().get(self._metric)
+            latest_metric, metric_iter = metric_tuple
+
+            if self._bfirst:              
+                self._bfirst = False
+                self._current_best_iteration, self._current_best_validation_loss = metric_iter, latest_metric
+
+            else:                               
+                if(latest_metric > self._current_best_validation_loss):
+                    self._count = self._count + 1
+                    if (self._count == self._patience): # ho raggiunto la patience e devo terminare il training loop
+                        raise ValueError("Early stopping at iteration %d, because patience of %d reached"%(self.trainer.iter, self._count))
+                else:
+                    self._current_best_iteration, self._current_best_validation_loss = metric_iter, latest_metric
+                    self._count = 0
+
+            log_every_n_seconds(
+                    logging.INFO,
+                    "EARLYSTOPPING: current val_loss {} at iter {} || best val loss {} at iter {}|| patience: {}".format(
+                        latest_metric, metric_iter, self._current_best_validation_loss, self._current_best_iteration, self._count
+                    ),
+                    n=2,
+                )
