@@ -45,6 +45,7 @@ __all__ = [
     "TorchMemoryStats",
     "LossEvalHook",
     "LossEvalHook2",
+    "EarlyStopping",
 ]
 
 
