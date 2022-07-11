@@ -31,6 +31,8 @@ __all__ = [
     "RotationTransform",
     "ColorTransform",
     "PILColorTransform",
+    "BlurTransform",
+    "NoiseTransform",
 ]
 
 

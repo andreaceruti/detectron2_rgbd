@@ -37,6 +37,8 @@ __all__ = [
     "ResizeScale",
     "ResizeShortestEdge",
     "RandomCrop_CategoryAreaConstraint",
+    "Blur", 
+    "Noise",
 ]
 
 
