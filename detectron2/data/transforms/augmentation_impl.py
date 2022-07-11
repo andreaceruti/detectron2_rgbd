@@ -20,7 +20,7 @@ from fvcore.transforms.transform import (
 from PIL import Image
 
 from .augmentation import Augmentation, _transform_to_aug
-from .transform import ExtentTransform, ResizeTransform, RotationTransform
+from .transform import ExtentTransform, ResizeTransform, RotationTransform, BlurTransform, NoiseTransform
 
 __all__ = [
     "FixedSizeCrop",
@@ -612,3 +612,19 @@ class RandomLighting(Augmentation):
         return BlendTransform(
             src_image=self.eigen_vecs.dot(weights * self.eigen_vals), src_weight=1.0, dst_weight=1.0
         )
+
+class Blur(Augmentation):
+    def __init__(self, blur_type="Gaussian"): 
+        self.blur_type = blur_type
+        self._init(locals())
+
+    def get_transform(self, image):
+        return BlurTransform(self.blur_type)
+
+class Noise(Augmentation):
+    def __init__(self, noise_type="Gaussian"): 
+        self.noise_type = noise_type
+        self._init(locals())
+
+    def get_transform(self, image):
+        return NoiseTransform(self.noise_type)

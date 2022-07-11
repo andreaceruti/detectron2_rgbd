@@ -9,6 +9,7 @@ https://detectron2.readthedocs.io/tutorials/augmentation.html
 import numpy as np
 import torch
 import torch.nn.functional as F
+import albumentations as A
 from fvcore.transforms.transform import (
     CropTransform,
     HFlipTransform,
@@ -343,6 +344,71 @@ def Resize_rotated_box(transform, rotated_boxes):
 
     return rotated_boxes
 
+
+class BlurTransform(Transform):
+
+    def __init__(self, blur_type):
+        super().__init__()
+        self.blur_type = blur_type
+        self._set_attributes(locals())
+
+    def apply_image(self, img):
+        #determine type of blur based on blur_type parameters
+        if self.blur_type == "Basic":
+            transform = A.Blur(blur_limit = 7, always_apply=False, p=0.33)
+        elif self.blur_type == "Median":
+            transform = A.MedianBlur(blur_limit=7, always_apply=False, p=0.33)
+        elif self.blur_type == "Gaussian":
+            transform = A.GaussianBlur(blur_limit=(3,7), sigma_limit=0, always_apply=False, p=0.33)
+        elif self.blur_type == "Glass":
+            transform = A.GlassBlur(sigma=0.7, max_delta=4, iterations=2, always_apply=False, mode="fast", p=0.33)
+        elif self.blur_type == "Motion":
+            transform = A.MotionBlur(blur_limit=7, always_apply=False, p=0.33)
+          
+        augmented_image = transform(image=img)['image']
+        return augmented_image
+
+    def apply_coords(self, coords):
+        #coords[:, 0] = coords[:, 0] * (self.new_w * 1.0 / self.w)
+        #coords[:, 1] = coords[:, 1] * (self.new_h * 1.0 / self.h)
+        return coords
+
+    def apply_segmentation(self, segmentation):
+        segmentation = self.apply_image(segmentation)
+        return segmentation
+
+    def inverse(self):
+        return BlurTransform(self.blur_type)
+
+class NoiseTransform(Transform):
+    def __init__(self, noise_type):
+        super().__init__()
+        self.noise_type = noise_type
+        self._set_attributes(locals())
+
+    def apply_image(self, img):
+        #determine type of noise based on noise_type parameters
+        if self.noise_type == "Gaussian":
+            transform = A.GaussNoise(var_limit=(10,50), mean=0, per_channel=True, always_apply=False, p=0.33)
+        elif self.noise_type == "ISO":
+            transform = A.ISONoise(color_shift=(0.01, 0.30), intensity=(0.1,1.0), always_apply=False, p=0.33)
+        elif self.noise_type == "Multiplicative":
+            transform = A.MultiplicativeNoise(multipliers=(0.85,1.15), per_channel=False, elementwise=False, always_apply=False, p=0.33)
+          
+        augmented_image = transform(image=img)['image']
+        return augmented_image
+
+    def apply_coords(self, coords):
+        #coords[:, 0] = coords[:, 0] * (self.new_w * 1.0 / self.w)
+        #coords[:, 1] = coords[:, 1] * (self.new_h * 1.0 / self.h)
+        return coords
+
+    def apply_segmentation(self, segmentation):
+        segmentation = self.apply_image(segmentation)
+        return segmentation
+
+    def inverse(self):
+        return NoiseTransform(self.noise_type)
 
 HFlipTransform.register_type("rotated_box", HFlip_rotated_box)
 ResizeTransform.register_type("rotated_box", Resize_rotated_box)
