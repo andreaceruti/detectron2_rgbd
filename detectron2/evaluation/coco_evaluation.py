@@ -1033,9 +1033,6 @@ def _evaluate_predictions_on_coco_extended(
 
     assert len(coco_results) > 0
 
-    if not os.path.exist(output_dir):
-        os.mkdir(output_dir)
-
     if iou_type == "segm":
         coco_results = copy.deepcopy(coco_results)
         # When evaluating mask AP, if the results contain bbox, cocoapi will
