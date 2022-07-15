@@ -33,6 +33,8 @@ __all__ = [
     "PILColorTransform",
     "BlurTransform",
     "NoiseTransform",
+    "PixelDropoutTransform",
+    "CLAHETransform",
 ]
 
 
@@ -411,6 +413,58 @@ class NoiseTransform(Transform):
 
     def inverse(self):
         return NoiseTransform(self.noise_type)
+
+class PixelDropoutTransform(Transform):
+    def __init__(self, prob):
+        super().__init__()
+        self.prob = prob
+        self._set_attributes(locals())
+
+    def apply_image(self, img):
+        
+        transform = A.PixelDropout(dropout_prob=0.01, per_channel=False, p=self.prob)
+          
+        augmented_image = transform(image=img)['image']
+        return augmented_image
+
+    def apply_coords(self, coords):
+        #coords[:, 0] = coords[:, 0] * (self.new_w * 1.0 / self.w)
+        #coords[:, 1] = coords[:, 1] * (self.new_h * 1.0 / self.h)
+        return coords
+
+    def apply_segmentation(self, segmentation):
+        segmentation = self.apply_image(segmentation)
+        return segmentation
+
+    def inverse(self):
+        return PixelDropoutTransform(self.noise_type)
+
+class CLAHETransform(Transform):
+    def __init__(self, prob):
+        super().__init__()
+        self.prob = prob
+        self._set_attributes(locals())
+
+    def apply_image(self, img):
+        
+        transform = A.CLAHE(clip_limit=5, tile_grid_size=(8,8), always_apply=False, p=self.prob)
+          
+        augmented_image = transform(image=img)['image']
+        return augmented_image
+
+    def apply_coords(self, coords):
+        #coords[:, 0] = coords[:, 0] * (self.new_w * 1.0 / self.w)
+        #coords[:, 1] = coords[:, 1] * (self.new_h * 1.0 / self.h)
+        return coords
+
+    def apply_segmentation(self, segmentation):
+        segmentation = self.apply_image(segmentation)
+        return segmentation
+
+    def inverse(self):
+        return CLAHETransform(self.noise_type)
+
+
 
 HFlipTransform.register_type("rotated_box", HFlip_rotated_box)
 ResizeTransform.register_type("rotated_box", Resize_rotated_box)

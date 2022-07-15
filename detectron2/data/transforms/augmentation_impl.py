@@ -20,7 +20,7 @@ from fvcore.transforms.transform import (
 from PIL import Image
 
 from .augmentation import Augmentation, _transform_to_aug
-from .transform import ExtentTransform, ResizeTransform, RotationTransform, BlurTransform, NoiseTransform
+from .transform import ExtentTransform, ResizeTransform, RotationTransform, BlurTransform, NoiseTransform, PixelDropoutTransform, CLAHETransform
 
 __all__ = [
     "FixedSizeCrop",
@@ -39,6 +39,8 @@ __all__ = [
     "RandomCrop_CategoryAreaConstraint",
     "Blur", 
     "Noise",
+    "PixelDropout",
+    "CLAHE",
 ]
 
 
@@ -630,3 +632,21 @@ class Noise(Augmentation):
 
     def get_transform(self, image):
         return NoiseTransform(self.noise_type)
+
+class PixelDropout(Augmentation):
+    def __init__(self, prob): 
+        self.prob = prob
+        self._init(locals())
+
+    def get_transform(self, image):
+        return PixelDropoutTransform(self.prob)
+
+class CLAHE(Augmentation):
+    def __init__(self, prob): 
+        self.prob = prob
+        self._init(locals())
+
+    def get_transform(self, image):
+        return CLAHETransform(self.prob)
+
+
