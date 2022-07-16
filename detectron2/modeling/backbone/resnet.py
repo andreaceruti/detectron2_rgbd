@@ -981,7 +981,7 @@ def build_depth_resnet_backbone(cfg, input_shape):
     )
 
     # fmt: off
-    # freeze_at           = cfg.MODEL.BACKBONE.FREEZE_AT
+    freeze_at           = cfg.MODEL.BACKBONE.DEPTH_FREEZE_AT
     out_features        = cfg.MODEL.RESNETS.DEPTH_OUT_FEATURES
     depth               = cfg.MODEL.RESNETS.DEPTH
     num_groups          = cfg.MODEL.RESNETS.NUM_GROUPS
@@ -1045,4 +1045,4 @@ def build_depth_resnet_backbone(cfg, input_shape):
         out_channels *= 2
         bottleneck_channels *= 2
         stages.append(blocks)
-    return ResNet_depth(stem, stages, out_features=out_features)
+    return ResNet_depth(stem, stages, out_features=out_features, freeze_at=freeze_at)

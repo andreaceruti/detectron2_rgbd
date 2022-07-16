@@ -5,6 +5,7 @@ MODEL:
   BACKBONE:
     NAME: "build_resnet_rgbd_latefusion_fpn_backbone"
     FREEZE_AT: 0
+    DEPTH_FREEZE_AT: 0
   RGBD_FUSION: "late"
   FUSE_TYPE: "conv"
   PIXEL_MEAN: [103.530, 116.280, 123.675, 127.5] #RGB, D

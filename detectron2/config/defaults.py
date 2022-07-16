@@ -141,6 +141,8 @@ _C.MODEL.BACKBONE.NAME = "build_resnet_backbone"
 # stages are each group of residual blocks.
 _C.MODEL.BACKBONE.FREEZE_AT = 2
 
+_C.MODEL.BACKBONE.DEPTH_FREEZE_AT = 2
+
 
 # ---------------------------------------------------------------------------- #
 # FPN options
