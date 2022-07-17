@@ -272,7 +272,7 @@ class RGBD_FPN(Backbone):
             self.bottom_up_rgb_features, self.bottom_up_depth_features = self.bottom_up(x)
         else:
             self.bottom_up_rgb_features = self.bottom_up_rgb(x[:, :3, :, :])
-            self.bottom_up_depth_features = self.bottom_up_depth(x[:, 3:4, :, :]) 
+            self.bottom_up_depth_features = self.bottom_up_depth(x[:, 3:6, :, :])   #TODO: make this number of channels configurable. 
 
         bottom_up_features = {}
         for i, k in enumerate(self.bottom_up_rgb_features.keys()):
@@ -426,7 +426,7 @@ def build_resnet_rgbd_latefusion_fpn_backbone(cfg, input_shape: ShapeSpec):
     input_shape = ShapeSpec(channels=3)
     bottom_up_rgb = build_resnet_backbone(cfg, input_shape)
     # duplicate keys when loading pretrained-weights
-    input_shape = ShapeSpec(channels=1)
+    input_shape = ShapeSpec(channels=cfg.MODEL.DEPTH_CHANNELS)
     bottom_up_depth = build_depth_resnet_backbone(cfg, input_shape)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS

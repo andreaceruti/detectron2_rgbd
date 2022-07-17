@@ -142,6 +142,7 @@ _C.MODEL.BACKBONE.NAME = "build_resnet_backbone"
 _C.MODEL.BACKBONE.FREEZE_AT = 2
 
 _C.MODEL.BACKBONE.DEPTH_FREEZE_AT = 2
+_C.MODEL.BACKBONE.DEPTH_CHANNELS = 1
 
 
 # ---------------------------------------------------------------------------- #
