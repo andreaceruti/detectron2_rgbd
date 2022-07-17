@@ -426,7 +426,7 @@ def build_resnet_rgbd_latefusion_fpn_backbone(cfg, input_shape: ShapeSpec):
     input_shape = ShapeSpec(channels=3)
     bottom_up_rgb = build_resnet_backbone(cfg, input_shape)
     # duplicate keys when loading pretrained-weights
-    input_shape = ShapeSpec(channels=cfg.MODEL.DEPTH_CHANNELS)
+    input_shape = ShapeSpec(channels=cfg.MODEL.BACKBONE.DEPTH_CHANNELS)
     bottom_up_depth = build_depth_resnet_backbone(cfg, input_shape)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
